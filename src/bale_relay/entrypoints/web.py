@@ -1,6 +1,7 @@
 import hmac
 from flask import Flask, request, jsonify
 from sqlalchemy.exc import SQLAlchemyError
+from bale_relay.storage.models import Receiver
 from bale_relay.core.config import Config
 from bale_relay.core.errors import ServiceError
 from bale_relay.storage.database import Database
@@ -21,6 +22,10 @@ def create_app(config=None, database=None):
             return jsonify(error="not found"), 404
         if not request.is_json: return jsonify(error="JSON required"), 400
         try:
+            with queue.db.session_scope() as session:
+                receiver = session.get(Receiver, 1)
+                if receiver and receiver.mode != "webhook":
+                    return jsonify(error="receiver disabled"), 409
             result = queue.ingest(request.get_json())
         except ServiceError as exc:
             return jsonify(error=exc.message), exc.status

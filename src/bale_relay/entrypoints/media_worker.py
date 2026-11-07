@@ -8,9 +8,10 @@ from bale_relay.storage.models import Job, Update
 from bale_relay.core.errors import ServiceError
 
 class MediaWorker:
-    def __init__(self, queue, bale, youtube=None):
+    def __init__(self, queue, bale, youtube=None, cache=None):
         self.queue, self.bale = queue, bale
         self.youtube = youtube or YouTube()
+        self.cache = cache
     def save(self, job, result):
         with self.queue.db.session_scope() as s:
             changed = s.execute(update(Job).where(Job.id == job.id, Job.lease == job.lease, Job.state == "running").values(result=result)).rowcount
@@ -25,6 +26,15 @@ class MediaWorker:
         try:
             with self.queue.db.session_scope() as s: payload = s.get(Update, job.update_id).payload
             identifier = payload["message"]["text"].split(maxsplit=1)[1].strip()
+            from bale_relay.adapters.youtube import video_id
+            identifier = video_id(identifier)
+            cached = self.cache.get(identifier) if self.cache else None
+            if cached and not result.get("parts"):
+                result = {"video": cached["video"], "parts": [dict(part, state="pending") for part in cached["parts"]]}
+                self.save(job,result)
+            if result.get("parts") and all(part.get("file_id") for part in result["parts"]):
+                self.send_cached(job,result,active,deadline)
+                return True
             info = self.youtube.metadata(identifier, active=active)
             result.setdefault("video", info)
             result.setdefault("parts", [])
@@ -58,12 +68,31 @@ class MediaWorker:
                     row["state"] = "sent"
                     row["file_id"] = sent.get("video", {}).get("file_id") if isinstance(sent,dict) else None
                     self.save(job,result)
+            if self.cache: self.cache.put(identifier,result)
             self.queue.finish(job, result)
         except MediaPaused: self.queue.finish(job, result, "paused")
         except MediaCancelled: self.queue.finish(job, {}, "cancelled")
         except Exception:
             self.queue.finish(job, result, "failed")
         return True
+    def send_cached(self, job, result, active, deadline):
+        for index, part in enumerate(result["parts"]):
+            if not active(): raise MediaCancelled()
+            if time.monotonic() >= deadline: raise MediaPaused()
+            if part["state"] == "sent": continue
+            if part["state"] in {"sending", "unknown"}:
+                self.queue.finish(job,result,"unknown"); return
+            part["state"] = "sending"
+            self.save(job,result)
+            try:
+                self.bale.call("sendVideo", {"chat_id": job.user_id, "video": part["file_id"],
+                    "caption": f"{result['video']['title']} | {index+1}/{len(result['parts'])}"})
+            except AmbiguousDelivery:
+                part["state"] = "unknown"; self.save(job,result)
+                self.queue.finish(job,result,"unknown"); return
+            part["state"] = "sent"
+            self.save(job,result)
+        self.queue.finish(job,result)
     def run(self):
         while True:
             if not self.once(): time.sleep(2)

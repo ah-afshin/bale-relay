@@ -36,8 +36,8 @@ key's quota is independent from the original website. No automatic paid fallback
 ## Remaining acceptance gates
 
 - Further crash/concurrency verification of the conversational worker and delivery ledger.
-- Real media verification, file-ID cache reuse and explicit retry of unknown sends.
-- Docker build verification, runtime dependency lock and polling lifecycle.
+- Real media verification against yt-dlp/ffmpeg and actual restart behavior.
+- Docker build verification and runtime dependency lock.
 - PostgreSQL concurrency tests, real ffmpeg tests and sleep/restart recovery.
 - Live Bale/Neon/AI/search smoke test with operator credentials.
 - Several days of invited-user operation before relying on the service.
@@ -45,3 +45,29 @@ key's quota is independent from the original website. No automatic paid fallback
 Bale's domestic availability does not guarantee its foreign API connection survives
 an outage. Messages pass through Bale and AI providers. `/forget` can only remove
 application-controlled data, not copies held by third parties.
+
+## Receiver and recovery commands
+
+After migrations and access provisioning:
+
+```powershell
+bale-relay set-webhook https://your-service.onrender.com
+bale-relay webhook-info
+```
+
+To move to polling, stop the webhook deployment, run `bale-relay delete-webhook`,
+set `RECEIVER_MODE=polling`, and run `bale-relay poll`. Run the text and media workers
+separately. Polling checks the remote webhook and holds an expiring database lease;
+a second poller is rejected. Received offsets are committed only after ingestion.
+`webhook-info` prints only whether a webhook exists, never its secret URL.
+
+Bale commands: `/youtube query` lists videos, `/video ID` previews metadata and
+`/download ID` queues delivery. `/status` resumes paused work. `/retry JOB_ID`
+explicitly authorizes retrying a failed or unknown send and may produce duplicates.
+Each retry is restricted to the original owner and active conversation generation.
+Completed video's file IDs are reused for seven days, scoped to the bot token.
+
+Current local validation: 33 unittest cases passed; all three migrations match the
+SQLAlchemy metadata on SQLite. PostgreSQL and actual media tools are not yet tested.
+Installing a fresh environment failed because connections to PyPI timed out. No
+ffmpeg, Docker or PostgreSQL runtime was found in the checked installation paths.

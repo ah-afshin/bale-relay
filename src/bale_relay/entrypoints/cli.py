@@ -13,9 +13,47 @@ def main():
     sub.add_parser("serve")
     sub.add_parser("worker")
     sub.add_parser("media-worker")
+    sub.add_parser("poll")
+    sub.add_parser("delete-webhook")
+    sub.add_parser("webhook-info")
+    sub.add_parser("set-webhook").add_argument("origin")
     args = parser.parse_args()
     cfg = Config.from_env()
-    if args.command in {"worker", "media-worker"}:
+    if args.command in {"poll", "set-webhook", "delete-webhook", "webhook-info"}:
+        from bale_relay.adapters.bale import Bale
+        from bale_relay.core.http_client import HttpClient
+        from bale_relay.storage.models import Receiver
+        from bale_relay.entrypoints.polling import Poller
+        from sqlalchemy import select
+        import time
+        db = Database(cfg.database_url)
+        bale = Bale(cfg.token, HttpClient(10, 5_000_000, "BaleRelay/0.1"))
+        if args.command == "poll":
+            if cfg.receiver_mode != "polling": raise RuntimeError("Set RECEIVER_MODE=polling first")
+            Poller(Queue(db),bale).run()
+        elif args.command == "webhook-info":
+            print("Webhook configured:", bool(bale.call("getWebhookInfo").get("url")))
+        else:
+            with db.session_scope() as session:
+                receiver = session.scalar(select(Receiver).where(Receiver.id==1).with_for_update())
+                if receiver and receiver.lease_until > time.time(): raise RuntimeError("Stop the active poller first")
+                if args.command == "set-webhook":
+                    if cfg.receiver_mode != "webhook" or len(cfg.webhook_secret)<32: raise RuntimeError("Configure webhook mode and secret first")
+                    from urllib.parse import urlsplit
+                    from bale_relay.core.security import assert_public_url
+                    origin=args.origin.rstrip("/")
+                    url=urlsplit(origin)
+                    if url.scheme!="https" or url.path or url.query or url.fragment: raise RuntimeError("Provide only an HTTPS origin")
+                    assert_public_url(origin)
+                    bale.call("setWebhook", {"url":origin+"/webhooks/bale/"+cfg.webhook_secret})
+                    mode="webhook"
+                else:
+                    bale.call("deleteWebhook")
+                    mode="polling"
+                if receiver: receiver.mode=mode; receiver.owner=None; receiver.lease_until=0
+                else: session.add(Receiver(id=1,mode=mode,offset=0,owner=None,lease_until=0))
+            print("Receiver configuration updated")
+    elif args.command in {"worker", "media-worker"}:
         from bale_relay.services.runtime import Services
         from bale_relay.adapters.bale import Bale
         from bale_relay.core.http_client import HttpClient
@@ -24,7 +62,8 @@ def main():
         bale = Bale(cfg.token, HttpClient(10, 5_000_000, "BaleRelay/0.1"))
         if args.command == "media-worker":
             from bale_relay.entrypoints.media_worker import MediaWorker
-            MediaWorker(Queue(db), bale).run()
+            from bale_relay.storage.media_cache import FileCache
+            MediaWorker(Queue(db), bale, cache=FileCache(db,cfg.token)).run()
         else:
             Worker(Queue(db), Services(cfg, db), bale).run()
     elif args.command == "serve":

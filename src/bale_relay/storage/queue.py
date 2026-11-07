@@ -44,6 +44,7 @@ class Queue:
                 s.execute(update(Job).where(Job.user_id == uid, Job.state.in_(["queued", "running", "paused"])).values(state="cancelled"))
                 if command == "/forget":
                     s.execute(delete(Message).where(Message.user_id == uid))
+                    s.execute(update(Job).where(Job.user_id == uid).values(result={}))
                     s.execute(update(Delivery).where(Delivery.job_id.in_(select(Job.id).where(Job.user_id == uid))).values(text=""))
                     s.execute(update(Update).where(Update.user_id == uid).values(payload={}))
                     s.execute(update(Update).where(Update.id == row).values(payload=payload))
@@ -93,4 +94,9 @@ class Queue:
                 raise ServiceError("سهمیه به پایان رسیده است.", 429)
     def forget_expired(self, days=7):
         with self.db.session_scope() as s:
-            s.execute(delete(Message).where(Message.created < time.time()-days*86400))
+            cutoff = time.time()-days*86400
+            s.execute(delete(Message).where(Message.created < cutoff))
+            expired = select(Job.id).where(Job.created < cutoff)
+            s.execute(update(Delivery).where(Delivery.job_id.in_(expired)).values(text=""))
+            s.execute(update(Update).where(Update.created < cutoff).values(payload={}))
+            s.execute(update(Job).where(Job.created < cutoff).values(result={},state="expired",lease=None,lease_until=0))

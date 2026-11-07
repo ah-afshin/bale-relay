@@ -2,7 +2,7 @@
 
 The Dockerfile and Render blueprint are prepared but have not been built or deployed.
 This is still an experimental checkout. In particular, the download dependency lock,
-real ffmpeg verification, file-ID cache reuse, polling lifecycle, shared search cache,
+real ffmpeg verification, shared search cache,
 PostgreSQL concurrency and recovery tests remain acceptance gates.
 
 Use one free web service and a persistent Neon PostgreSQL database with TLS. Do not
@@ -15,7 +15,7 @@ The supervisor migrates the database and starts HTTP, text and media processes.
 There is intentionally no HTTP access log: webhook paths contain a secret.
 
 Use a local administrative CLI connected to the same database to allow numeric Bale
-user IDs. Register the HTTPS webhook only after checking /healthz and provisioning
+user IDs. Run `bale-relay set-webhook https://your-service.onrender.com` only after checking /healthz and provisioning
 users. Live API smoke tests require operator-provided credentials.
 
 Free hosts may sleep or restart. `/status` requeues paused video work; unknown sends

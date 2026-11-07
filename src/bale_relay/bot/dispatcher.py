@@ -1,7 +1,7 @@
 import time
 from datetime import datetime, timezone
 from sqlalchemy import select, delete, update
-from bale_relay.storage.models import User, Update, Job, Message
+from bale_relay.storage.models import User, Update, Job, Message, Delivery
 from bale_relay.core.errors import ServiceError
 
 HELP = "سلام! یکی از فرمان‌ها را انتخاب کنید:\n/ai چت با هوش مصنوعی\n/model انتخاب مدل\n/new گفت‌وگوی جدید\n/search عبارت جست‌وجو\n/youtube جست‌وجوی ویدیو\n/status وضعیت کارها\n/cancel لغو\n/forget حذف تاریخچه\n/privacy حریم خصوصی"
@@ -35,6 +35,19 @@ class Dispatcher:
             with db.session_scope() as s:
                 jobs = s.scalars(select(Job).where(Job.user_id == job.user_id, Job.id != job.id).order_by(Job.id.desc()).limit(5)).all()
                 return "\n".join(f"{j.id}: {j.state}" for j in jobs) or "کاری ثبت نشده است."
+        if command == "/retry":
+            if not argument.isdigit(): return "برای تأیید ارسال دوباره: /retry شمارهٔ کار"
+            with db.session_scope() as s:
+                target=s.scalar(select(Job).where(Job.id==int(argument),Job.user_id==job.user_id,Job.generation==job.generation).with_for_update())
+                if not target or target.state not in {"unknown", "paused", "failed"}: return "این کار قابل تلاش مجدد نیست."
+                data=dict(target.result)
+                if target.lane=="media":
+                    data["parts"]=[dict(part,state="pending") if part.get("state") in {"unknown","sending"} else part for part in data.get("parts",[])]
+                    target.result=data
+                else:
+                    s.execute(update(Delivery).where(Delivery.job_id==target.id,Delivery.state.in_(["unknown","sending"])).values(state="pending"))
+                target.state="queued"
+            return "تلاش دوباره ثبت شد؛ ارسال نامشخص ممکن است تکراری باشد."
         if command == "/model":
             models = self.services.models()
             if not argument: return "مدل‌های مجاز:\n" + ("\n".join(models) or "هنوز مدلی تنظیم نشده است.") + "\n/model provider/model"
