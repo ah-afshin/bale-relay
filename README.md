@@ -4,7 +4,7 @@ Independent Python bot for private Bale chats, with AI, Google search and YouTub
 Implementation is in progress. This checkout currently includes the durable ingress/queue,
 access control, migrations, provider adapters and their tests. The text dispatcher and durable outbound delivery ledger are implemented. The
 YouTube pipeline and deployment bundle now have an initial implementation; real media and deployment verification remain outstanding.
-Do not deploy this partial checkout as a working emergency service.
+Local verification is complete; treat the first foreign-host deployment as an experimental pilot until live AI, Google, YouTube and several-day operation pass.
 
 ## Development
 
@@ -180,3 +180,37 @@ and system binaries still need a fully resolved deployment lock/build verificati
 The current suite has 64 cases: 61 pass, including actual media/HTTP tests, and
 three PostgreSQL contention cases skip. Five migrations match model metadata on
 SQLite. `doctor` resolves the migration head from Alembic rather than a hardcoded ID.
+
+## Final local verification
+
+All 64 tests passed with no skips using real PostgreSQL 16.15 and ffmpeg. All five
+Alembic migrations ran on PostgreSQL and schema comparison returned no differences.
+The temporary localhost-only PostgreSQL instance was stopped and removed afterward.
+The psycopg 3.3.8 Python implementation used official source and the verified test
+bundle's libpq. No production database or user data was used for these tests.
+
+For setup on Windows without installing the Python CLI, use the dependency-free
+PowerShell helper from the repository root:
+
+```powershell
+.\deploy\bale-admin.ps1 -Action Identify
+.\deploy\bale-admin.ps1 -Action Register -Origin https://YOUR-SERVICE.onrender.com
+```
+
+Identify must be run before webhook registration. It asks you to send a random
+marker to your bot and returns only the matching private sender's numeric ID.
+Register reads BALE_TOKEN and WEBHOOK_SECRET from the ignored local .env and never
+prints the secret webhook URL. Copy the exact same WEBHOOK_SECRET into Render.
+
+Once the container has created tables, allow that ID using Neon's SQL Editor:
+
+```sql
+INSERT INTO bot_users (id, enabled, generation, model, mode)
+VALUES (YOUR_NUMERIC_ID, TRUE, 0, '', 'ai')
+ON CONFLICT (id) DO UPDATE SET enabled = TRUE;
+```
+
+Docker build/startup, Render/Neon account setup and real foreign-host provider
+availability are not established by the local test suite. The CI workflow is
+prepared to check Docker on a runner. Model allowlisting must be supplied by the
+operator using free model identifiers; an empty list intentionally disables AI.

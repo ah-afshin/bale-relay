@@ -16,7 +16,7 @@ is inferred from mocked test responses.
 | Bounded process lifetime and cancellation | Downloader process deadlines; upload checkpoint tests | Hard process termination on deployed host |
 | Part recovery, file-ID reuse, unknown-send explicit retry | Media/cache/recovery tests | Real Bale file-ID reuse and interrupted upload |
 | Low-memory uploads | Actual localhost HTTP multipart exchange, <=64 KiB body chunks | Resident-memory measurement on free host |
-| Persistent PostgreSQL | Models/migrations and conditional concurrency tests prepared | TEST_POSTGRES_URL required; those tests have not run |
+| Persistent PostgreSQL | Migrations, schema comparison and real contention tests passed | All three contention tests passed against temporary PostgreSQL 16.15 |
 | Webhook/polling exclusivity and durable offset | Recovery tests; CLI registration/delete and expiring poll lease | Live transport switching |
 | Docker web+text+media supervisor | Dockerfile, Render blueprint, CI container-start smoke authored | Docker build and workflow execution |
 | Repeatable dependencies | Direct runtime versions, yt-dlp and Deno pinned | Full runtime dependency lock and fresh build |
@@ -24,7 +24,7 @@ is inferred from mocked test responses.
 | Real network emergency path | No evidence yet | Bale <-> foreign host test; no domestic-availability guarantee |
 | Several-day limited trial | Aggregate content-free stats command and processing/transfer metrics | Host, credentials, approved users and actual observation |
 
-Local suite: 64 cases, 61 passing and three PostgreSQL cases skipped. Actual ffmpeg
+Local suite: all 64 cases pass with no skips, including actual PostgreSQL and ffmpeg. Actual ffmpeg
 splitting passes with checksum-verified official binaries. Read-only YouTube metadata
 from the current machine failed with a connection reset. PyPI installation still
 fails from the current network. GitHub release downloads work through curl.
@@ -40,3 +40,8 @@ SERPAPI_API_KEY with independent quota remain missing, as does the operator's nu
 Bale user ID. WEBHOOK_SECRET was generated locally without displaying its value.
 AI_ALLOWED_MODELS remains empty until model access and free-tier eligibility are
 verified. Credentials are never copied from the source website's `.env`.
+
+Final verification executed all 64 cases with no skips. Five migrations were applied
+on PostgreSQL 16.15 and model metadata matched. The temporary server was shut down
+and its data directory removed. Docker/Render and the credentialed foreign-host
+pilot remain unverified; local test success is not a deployment success claim.
