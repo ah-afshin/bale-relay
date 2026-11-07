@@ -2,7 +2,7 @@
 
 The Dockerfile and Render blueprint are prepared but have not been built or deployed.
 This is still an experimental checkout. In particular, the download dependency lock,
-real ffmpeg verification, PostgreSQL concurrency and recovery tests remain acceptance gates.
+PostgreSQL concurrency and recovery tests remain acceptance gates. The real ffmpeg test has passed locally with downloaded official tools; the Docker build remains unverified.
 
 Use one free web service and a persistent Neon PostgreSQL database with TLS. Do not
 create a free Render database with expiry for durable bot state. Configure provider

@@ -67,7 +67,7 @@ explicitly authorizes retrying a failed or unknown send and may produce duplicat
 Each retry is restricted to the original owner and active conversation generation.
 Completed video's file IDs are reused for seven days, scoped to the bot token.
 
-Current local validation: 43 unittest cases passed; all four migrations match the
+Earlier local schema validation: all four migrations matched the
 SQLAlchemy metadata on SQLite. PostgreSQL and actual media tools are not yet tested.
 Installing a fresh environment failed because connections to PyPI timed out. No
 ffmpeg, Docker or PostgreSQL runtime was found in the checked installation paths.
@@ -104,3 +104,40 @@ The actual ffmpeg test is `tests.test_media_real`: it generates H.264/AAC media,
 splits at keyframes, checks every output's real byte size and duration, and verifies
 continuous intended time ranges. If ffmpeg/ffprobe are missing it reports a skip;
 a skipped result does not satisfy the real-media acceptance gate.
+
+## Verification automation
+
+The GitHub workflow runs Python 3.12 tests with a disposable PostgreSQL service and
+ffmpeg, builds the Docker image, starts its web/text/media processes against the
+test database, checks `/healthz`, verifies an unapproved user's webhook is denied,
+and checks the container's ffmpeg/ffprobe/Deno/yt-dlp executables. This workflow has
+been authored but not executed in this session; it requires pushing the commit.
+No provider keys or chat recipients are configured in these automated checks.
+
+`TEST_POSTGRES_URL` enables three real database contention tests. Each uses a unique
+temporary schema and removes it afterward. Supply a disposable test database, never
+a production DSN. With no URL they explicitly skip.
+
+Provider regression tests cover all five AI adapters, deny unapproved models and
+verify no automatic provider fallback. Google tests cover independent-quota
+attestation, cross-instance caching and the 200-attempt monthly fail-closed limit.
+These are mocked upstream responses and do not prove live provider availability.
+
+## Latest local evidence
+
+The official ffmpeg Windows shared archive (91,000,239 bytes) was downloaded from
+`yt-dlp/FFmpeg-Builds` and checked against the release API SHA-256 digest. The real
+media test now passes: it exposed and fixed an input-seek bug that retained an
+older GOP in later parts. Output seeking at selected keyframes avoids that overlap.
+
+With the downloaded tools on PATH, the suite has 56 cases: 53 pass, including actual
+ffmpeg generation/splitting; three PostgreSQL tests skip without TEST_POSTGRES_URL.
+The official yt-dlp 2026.10.26 module executes locally. A read-only request to the
+public yt-dlp test video failed with a connection reset from the YouTube path;
+live YouTube availability from the eventual foreign host is still unverified.
+
+PyPI is still unreachable here. The independent virtualenv is incomplete. Local
+unit tests currently use the existing wartime-mirror Python environment with this
+repository's src on PYTHONPATH; the bot source has no runtime dependency on that
+repository. Docker, PostgreSQL and live Bale/provider credentials remain separate
+verification gates. No commit has been pushed to GitHub during this session.

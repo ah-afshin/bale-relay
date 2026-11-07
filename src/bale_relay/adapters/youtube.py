@@ -136,14 +136,13 @@ class YouTube:
             if attempts > 40 or len(parts)+len(pending)+1 > MAX_PARTS:
                 raise ServiceError("تعداد قطعه‌ها از سقف مجاز بیشتر است.", 400)
             target = directory/f"segment-{attempts:03d}.mp4"
-            self.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-ss", str(start), "-i", str(source),
+            self.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(source), "-ss", str(start),
                       "-t", str(end-start), "-map", "0:v:0", "-map", "0:a:0", "-c", "copy", "-avoid_negative_ts", "make_zero", "-movflags", "+faststart", str(target)], deadline=deadline, active=active)
             if not target.is_file() or target.stat().st_size == 0: raise ServiceError("تقسیم ویدیو ناموفق بود.")
             if target.stat().st_size <= MAX_PART:
                 parts.append(Part(target, start, end))
             else:
                 target.unlink()
-                if end-start <= 5: raise ServiceError("تقسیم بدون تبدیل کیفیت در سقف حجم ممکن نیست.", 400)
                 if keyframes is None:
                     raw=self.run(["ffprobe","-v","error","-select_streams","v:0","-skip_frame","nokey",
                                   "-show_entries","frame=best_effort_timestamp_time","-of","json",str(source)],

@@ -41,5 +41,13 @@ class Poller:
     def run(self):
         self.acquire()
         try:
-            while True: self.once()
+            delay=1
+            while True:
+                try:
+                    self.once()
+                    delay=1
+                except ServiceError as exc:
+                    if exc.status==409: raise
+                    time.sleep(delay)
+                    delay=min(delay*2,20)
         finally: self.release()

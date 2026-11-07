@@ -15,3 +15,10 @@ class DoctorTests(unittest.TestCase):
         self.assertFalse(checks["approved_models"])
         self.assertFalse(checks["migrations"])
         self.assertTrue(checks["database"])
+
+    def test_readiness_does_not_create_missing_database(self):
+        from pathlib import Path
+        path=Path(self.temp.name)/"missing.sqlite3"
+        checks=examine(Config(database_url="sqlite:///"+str(path)))
+        self.assertFalse(checks["database"])
+        self.assertFalse(path.exists())

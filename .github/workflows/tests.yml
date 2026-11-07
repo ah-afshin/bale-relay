@@ -1,0 +1,48 @@
+name: Verification
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: relay_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      TEST_POSTGRES_URL: postgresql+psycopg://postgres:test-only@localhost:5432/relay_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pip install -e '.[media,server]'
+      - run: python -m unittest discover -v
+      - run: alembic upgrade head
+      - run: docker build -t bale-relay:test .
+      - name: Verify container startup and default-deny webhook
+        shell: bash
+        run: |
+          docker run -d --name relay-smoke --network host \
+            -e APP_ENV=production \
+            -e DATABASE_URL="$TEST_POSTGRES_URL" \
+            -e BALE_TOKEN=test-only-not-a-real-token \
+            -e WEBHOOK_SECRET=abcdefghijklmnopqrstuvwxyz0123456789 \
+            -e PORT=10000 bale-relay:test
+          trap 'docker rm -f relay-smoke >/dev/null' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:10000/healthz >/dev/null; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:10000/healthz
+          code=$(curl --silent -o /dev/null -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' -d '{"update_id":1,"message":{"from":{"id":123},"chat":{"id":123,"type":"private"},"text":"hello"}}' \
+            http://127.0.0.1:10000/webhooks/bale/abcdefghijklmnopqrstuvwxyz0123456789)
+          test "$code" = 403
+          docker exec relay-smoke ffmpeg -version >/dev/null
+          docker exec relay-smoke ffprobe -version >/dev/null
+          docker exec relay-smoke deno --version >/dev/null
+          docker exec relay-smoke python -m yt_dlp --version

@@ -1,6 +1,8 @@
 """Read-only deployment checks. Results never contain keys, DSNs or request URLs."""
 import importlib.util
 import shutil
+from pathlib import Path
+from sqlalchemy.engine import make_url
 from sqlalchemy import inspect, text
 from bale_relay.storage.models import Base
 from bale_relay.storage.database import Database
@@ -20,6 +22,9 @@ def examine(config, database=None, live=False):
     checks["database"]=False
     db=None
     try:
+        parsed=make_url(config.database_url)
+        if database is None and parsed.drivername.startswith("sqlite") and parsed.database not in (None,":memory:") and not Path(parsed.database).is_file():
+            raise RuntimeError("Database does not exist")
         db=database or Database(config.database_url)
         with db.engine.connect() as c:
             c.execute(text("SELECT 1"))
