@@ -7,14 +7,34 @@ class Bale:
         if not token: raise ValueError("BALE_TOKEN is required")
         self.base = "https://tapi.bale.ai/bot" + token
         self.http = http
-    def call(self, method, payload=None, files=None):
+    def call(self, method, payload=None, files=None, *, deadline=None, active=None):
         allowed = {"getMe", "sendMessage", "sendVideo", "sendDocument", "getUpdates", "setWebhook", "deleteWebhook", "getWebhookInfo", "answerCallbackQuery"}
         if method not in allowed: raise ValueError("Unsupported method")
         sending = method in {"sendMessage", "sendVideo", "sendDocument"}
         try:
-            options = {"data": payload, "files": files} if files else {"json": payload or {}}
+            timeout=90 if files else 40
+            if deadline is not None:
+                import time
+                from bale_relay.adapters.youtube import MediaPaused
+                remaining=deadline-time.monotonic()
+                if remaining<=0:raise MediaPaused()
+                timeout=min(timeout,remaining)
+            if files:
+                import time
+                from bale_relay.adapters.multipart import MultipartStream
+                from bale_relay.adapters.youtube import MediaPaused,MediaCancelled
+                last_check=[0.0]
+                def check():
+                    now=time.monotonic()
+                    if deadline is not None and now>=deadline:raise MediaPaused()
+                    if active is not None and now-last_check[0]>=0.5:
+                        last_check[0]=now
+                        if not active():raise MediaCancelled()
+                body=MultipartStream(payload,files,check)
+                options={"data":body,"headers":{"Content-Type":"multipart/form-data; boundary="+body.boundary,"Content-Length":str(len(body))}}
+            else:options={"json":payload or {}}
             response = self.http.request("POST", self.base + "/" + method,
-                    timeout=90 if files else 40, retries=False, allow_redirects=False, **options)
+                    timeout=timeout, retries=False, allow_redirects=False, **options)
         except ServiceError:
             if sending: raise AmbiguousDelivery("وضعیت ارسال نامشخص است؛ پیش از ارسال دوباره بررسی کنید.", 504) from None
             raise ServiceError("ارتباط با بله برقرار نشد.", 503) from None

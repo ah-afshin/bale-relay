@@ -34,7 +34,8 @@ class Dispatcher:
                 s.execute(update(Job).where(Job.user_id == job.user_id, Job.generation == job.generation, Job.state == "paused").values(state="queued"))
             with db.session_scope() as s:
                 jobs = s.scalars(select(Job).where(Job.user_id == job.user_id, Job.id != job.id).order_by(Job.id.desc()).limit(5)).all()
-                return "\n".join(f"{j.id}: {j.state}" for j in jobs) or "کاری ثبت نشده است."
+                labels={"queued":"در صف","running":"در حال پردازش","paused":"متوقف؛ ادامه با /status","unknown":"نتیجه نامشخص؛ بررسی و تأیید با /retry","done":"انجام شد","failed":"ناموفق","cancelled":"لغو شد","expired":"منقضی شد"}
+                return "\n".join(f"{j.id}: {labels.get(j.state,'نامشخص')}" for j in jobs) or "کاری ثبت نشده است."
         if command == "/retry":
             if not argument.isdigit(): return "برای تأیید ارسال دوباره: /retry شمارهٔ کار"
             with db.session_scope() as s:

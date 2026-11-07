@@ -61,7 +61,7 @@ class MediaWorker:
                     caption = f"{info['title']}\n{index+1}/{len(parts)} | {part.start:.0f}–{part.end:.0f}s"
                     try:
                         with part.path.open("rb") as video:
-                            sent = self.bale.call("sendVideo", {"chat_id": job.user_id, "caption": caption}, files={"video": ("video.mp4",video,"video/mp4")})
+                            sent = self.bale.call("sendVideo", {"chat_id": job.user_id, "caption": caption}, files={"video": ("video.mp4",video,"video/mp4")},deadline=deadline,active=active)
                     except AmbiguousDelivery:
                         row["state"] = "unknown"; self.save(job, result)
                         self.queue.finish(job, result, "unknown"); return True
@@ -86,7 +86,7 @@ class MediaWorker:
             self.save(job,result)
             try:
                 self.bale.call("sendVideo", {"chat_id": job.user_id, "video": part["file_id"],
-                    "caption": f"{result['video']['title']} | {index+1}/{len(result['parts'])}"})
+                    "caption": f"{result['video']['title']} | {index+1}/{len(result['parts'])}"},deadline=deadline)
             except AmbiguousDelivery:
                 part["state"] = "unknown"; self.save(job,result)
                 self.queue.finish(job,result,"unknown"); return

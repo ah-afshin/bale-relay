@@ -141,3 +141,10 @@ unit tests currently use the existing wartime-mirror Python environment with thi
 repository's src on PYTHONPATH; the bot source has no runtime dependency on that
 repository. Docker, PostgreSQL and live Bale/provider credentials remain separate
 verification gates. No commit has been pushed to GitHub during this session.
+
+See `deploy/ACCEPTANCE.md` for requirement-by-requirement evidence and remaining
+verification. Current local suite: 59 cases, 56 pass, three PostgreSQL skips.
+Video upload bodies now stream in 64 KiB chunks instead of requests' buffered file
+multipart mode; actual localhost HTTP verifies content length and body correctness.
+Upload timeout is capped by the remaining media pass deadline, with cancellation
+and deadline checkpoints while reading the file.
