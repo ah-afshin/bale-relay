@@ -12,15 +12,21 @@ def main():
         sub.add_parser(name).add_argument("id", type=int)
     sub.add_parser("serve")
     sub.add_parser("worker")
+    sub.add_parser("media-worker")
     args = parser.parse_args()
     cfg = Config.from_env()
-    if args.command == "worker":
+    if args.command in {"worker", "media-worker"}:
         from bale_relay.services.runtime import Services
         from bale_relay.adapters.bale import Bale
         from bale_relay.core.http_client import HttpClient
         from bale_relay.entrypoints.worker import Worker
         db = Database(cfg.database_url)
-        Worker(Queue(db), Services(cfg, db), Bale(cfg.token, HttpClient(10, 5_000_000, "BaleRelay/0.1"))).run()
+        bale = Bale(cfg.token, HttpClient(10, 5_000_000, "BaleRelay/0.1"))
+        if args.command == "media-worker":
+            from bale_relay.entrypoints.media_worker import MediaWorker
+            MediaWorker(Queue(db), bale).run()
+        else:
+            Worker(Queue(db), Services(cfg, db), bale).run()
     elif args.command == "serve":
         from bale_relay.entrypoints.web import create_app
         create_app(cfg).run(host="127.0.0.1", port=5000)

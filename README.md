@@ -3,7 +3,7 @@
 Independent Python bot for private Bale chats, with AI, Google search and YouTube delivery.
 Implementation is in progress. This checkout currently includes the durable ingress/queue,
 access control, migrations, provider adapters and their tests. The text dispatcher and durable outbound delivery ledger are implemented. The
-YouTube pipeline and deployment bundle are still being built.
+YouTube pipeline and deployment bundle now have an initial implementation; real media and deployment verification remain outstanding.
 Do not deploy this partial checkout as a working emergency service.
 
 ## Development
@@ -36,8 +36,8 @@ key's quota is independent from the original website. No automatic paid fallback
 ## Remaining acceptance gates
 
 - Further crash/concurrency verification of the conversational worker and delivery ledger.
-- YouTube search, controlled downloads, actual byte caps, lossless splitting and resume.
-- Render Docker bundle with both web and worker; polling exclusivity.
+- Real media verification, file-ID cache reuse and explicit retry of unknown sends.
+- Docker build verification, runtime dependency lock and polling lifecycle.
 - PostgreSQL concurrency tests, real ffmpeg tests and sleep/restart recovery.
 - Live Bale/Neon/AI/search smoke test with operator credentials.
 - Several days of invited-user operation before relying on the service.

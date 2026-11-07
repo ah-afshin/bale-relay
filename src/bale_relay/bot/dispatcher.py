@@ -1,6 +1,6 @@
 import time
 from datetime import datetime, timezone
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from bale_relay.storage.models import User, Update, Job, Message
 from bale_relay.core.errors import ServiceError
 
@@ -31,6 +31,8 @@ class Dispatcher:
         if command in {"/forget", "/new", "/cancel"}: return "انجام شد."
         if command == "/status":
             with db.session_scope() as s:
+                s.execute(update(Job).where(Job.user_id == job.user_id, Job.generation == job.generation, Job.state == "paused").values(state="queued"))
+            with db.session_scope() as s:
                 jobs = s.scalars(select(Job).where(Job.user_id == job.user_id, Job.id != job.id).order_by(Job.id.desc()).limit(5)).all()
                 return "\n".join(f"{j.id}: {j.state}" for j in jobs) or "کاری ثبت نشده است."
         if command == "/model":
@@ -50,8 +52,16 @@ class Dispatcher:
             self._quota(job, "search", self.services.config.search_daily, 100)
             result = self.services.search(query)
             return "\n\n".join(f"{i}. {r['title']}\n{r['snippet']}\n{r['url']}" for i,r in enumerate(result["results"],1)) or "نتیجه‌ای پیدا نشد."
-        if command == "/youtube":
-            return "قابلیت یوتیوب در حال تکمیل است."
+        if command in {"/youtube", "/video"}:
+            from bale_relay.adapters.youtube import YouTube, video_id
+            yt = YouTube()
+            if not argument: return "برای جست‌وجو /youtube عبارت و برای انتخاب /video شناسه را بفرستید."
+            if command == "/video":
+                info = yt.metadata(argument, active=lambda: self.queue.live(job))
+                return f"{info['title']}\n{info['duration']:.0f} ثانیه | 360p\nبرای دریافت: /download {info['id']}"
+            results = yt.search(argument, active=lambda: self.queue.live(job))
+            return "\n\n".join(f"{i}. {r['title']}\n{r['duration']:.0f}s\n/video {r['id']}" for i,r in enumerate(results,1)) or "نتیجه‌ای پیدا نشد."
+        if command == "/download": return "فرمت فرمان: /download شناسهٔ معتبر ویدیو"
         if command.startswith("/"): return HELP
         if not model: return "ابتدا با /model یک مدل انتخاب کنید."
         self._quota(job, "ai", self.services.config.ai_daily, 200)

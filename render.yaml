@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: bale-relay
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: RECEIVER_MODE
+        value: webhook
+      - key: DATABASE_URL
+        sync: false
+      - key: BALE_TOKEN
+        sync: false
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: AI_ALLOWED_MODELS
+        sync: false

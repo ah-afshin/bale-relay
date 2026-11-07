@@ -2,6 +2,7 @@ import hmac
 from flask import Flask, request, jsonify
 from sqlalchemy.exc import SQLAlchemyError
 from bale_relay.core.config import Config
+from bale_relay.core.errors import ServiceError
 from bale_relay.storage.database import Database
 from bale_relay.storage.queue import Queue
 
@@ -21,6 +22,8 @@ def create_app(config=None, database=None):
         if not request.is_json: return jsonify(error="JSON required"), 400
         try:
             result = queue.ingest(request.get_json())
+        except ServiceError as exc:
+            return jsonify(error=exc.message), exc.status
         except ValueError:
             return jsonify(error="invalid update"), 400
         except SQLAlchemyError:

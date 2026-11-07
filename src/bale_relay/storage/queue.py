@@ -26,6 +26,7 @@ class Queue:
         if not isinstance(message, dict) or not isinstance(sender, dict): return "ignored"
         chat = message.get("chat", {})
         uid = sender.get("id")
+        if not isinstance(chat, dict): return "denied"
         if type(uid) is not int or chat.get("type") != "private" or chat.get("id") != uid:
             return "denied"
         with self.db.session_scope() as s:
@@ -46,7 +47,19 @@ class Queue:
                     s.execute(update(Delivery).where(Delivery.job_id.in_(select(Job.id).where(Job.user_id == uid))).values(text=""))
                     s.execute(update(Update).where(Update.user_id == uid).values(payload={}))
                     s.execute(update(Update).where(Update.id == row).values(payload=payload))
-            s.add(Job(update_id=row, user_id=uid, generation=user.generation, created=time.time(), result={}))
+            lane = "media" if command == "/download" else "text"
+            if lane == "media":
+                from bale_relay.adapters.youtube import video_id
+                try: video_id(text.split(maxsplit=1)[1].strip())
+                except (ServiceError, IndexError): lane = "text"
+                if lane == "media":
+                    from datetime import datetime, timezone
+                    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                    for key, limit in ((f"youtube:{day}:{uid}", 1), (f"youtube:{day}:global", 10)):
+                        stmt = ins(Usage).values(key=key, used=1).on_conflict_do_update(index_elements=[Usage.key], set_={"used": Usage.used+1}, where=Usage.used < limit).returning(Usage.key)
+                        if s.execute(stmt).scalar_one_or_none() is None:
+                            raise ServiceError("سهمیهٔ یوتیوب به پایان رسیده است.", 429)
+            s.add(Job(update_id=row, user_id=uid, generation=user.generation, lane=lane, created=time.time(), result={}))
         return "accepted"
     def claim(self, lane="text", ttl=120):
         now = time.time()
@@ -55,7 +68,7 @@ class Queue:
             s.execute(update(Job).where(Job.state == "running", Job.lease_until < now).values(state="queued", lease=None))
             earlier = aliased(Job)
             candidate = select(Job.id).where(Job.state == "queued", Job.lane == lane,
-                ~exists(select(earlier.id).where(earlier.user_id == Job.user_id, earlier.id < Job.id,
+                ~exists(select(earlier.id).where(earlier.user_id == Job.user_id, earlier.lane == Job.lane, earlier.id < Job.id,
                          earlier.state.in_(["queued", "running"])))).order_by(Job.id).limit(1).scalar_subquery()
             token = uuid.uuid4().hex
             job = s.execute(update(Job).where(Job.id == candidate, Job.state == "queued").values(
