@@ -4,9 +4,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certi
 ARG DENO_VERSION=2.5.6
 RUN curl -fsSL https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip -o /tmp/deno.zip && unzip /tmp/deno.zip -d /usr/local/bin && rm /tmp/deno.zip
 WORKDIR /app
-COPY pyproject.toml ./
+COPY pyproject.toml requirements-runtime.txt ./
 COPY src ./src
-RUN pip install --no-cache-dir . gunicorn 'yt-dlp[default]==2026.10.26'
+RUN pip install --no-cache-dir -r requirements-runtime.txt && pip install --no-cache-dir --no-deps .
 COPY alembic.ini ./
 COPY migrations ./migrations
 RUN useradd --create-home relay && chown -R relay:relay /app

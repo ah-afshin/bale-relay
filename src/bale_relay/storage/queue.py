@@ -94,7 +94,9 @@ class Queue:
                          earlier.state.in_(["queued", "running"])))).order_by(Job.id).limit(1).scalar_subquery()
             token = uuid.uuid4().hex
             job = s.execute(update(Job).where(Job.id == candidate, Job.state == "queued").values(
-                state="running", lease=token, lease_until=now+ttl).returning(Job)).scalar_one_or_none()
+                state="running", lease=token, lease_until=now+ttl, started=now, finished=0).returning(Job)).scalar_one_or_none()
+            if job is not None:
+                job.metrics=dict(job.metrics or {},attempts=(job.metrics or {}).get("attempts",0)+1)
             return job
     def live(self, job):
         with self.db.session_scope() as s:
@@ -104,8 +106,28 @@ class Queue:
                         current.lease == job.lease and current.lease_until > time.time() and user.generation == job.generation)
     def finish(self, job, result, state="done"):
         with self.db.session_scope() as s:
-            return s.execute(update(Job).where(Job.id == job.id, Job.lease == job.lease, Job.state == "running").values(
-                state=state, result=result, lease=None, lease_until=0)).rowcount == 1
+            row=s.scalar(select(Job).where(Job.id==job.id).with_for_update())
+            if row is None or row.lease!=job.lease or row.state!="running":return False
+            now=time.time()
+            row.metrics=dict(row.metrics or {},processing_seconds=(row.metrics or {}).get("processing_seconds",0)+max(0,now-row.started))
+            row.state=state;row.result=result;row.lease=None;row.lease_until=0;row.finished=now
+            return True
+    def metric(self,job,key,value=1):
+        if key not in {"service_errors","downloaded_bytes","uploaded_bytes"} or type(value) not in {int,float} or value<0:
+            raise ValueError("Invalid metric")
+        with self.db.session_scope() as s:
+            row=s.scalar(select(Job).where(Job.id==job.id).with_for_update())
+            if row is None or row.lease!=job.lease or row.state!="running":return
+            row.metrics=dict(row.metrics or {},**{key:(row.metrics or {}).get(key,0)+value})
+    def statistics(self):
+        report={"states":{},"lanes":{},"attempts":0,"processing_seconds":0,"service_errors":0,"downloaded_bytes":0,"uploaded_bytes":0}
+        with self.db.session_scope() as s:
+            for lane,state,metrics in s.execute(select(Job.lane,Job.state,Job.metrics)):
+                report["states"][state]=report["states"].get(state,0)+1
+                report["lanes"][lane]=report["lanes"].get(lane,0)+1
+                for key in ("attempts","processing_seconds","service_errors","downloaded_bytes","uploaded_bytes"):
+                    report[key]+=(metrics or {}).get(key,0)
+        return report
     def reserve(self, key, limit):
         ins = sqlite_insert if self.db.engine.dialect.name == "sqlite" else pg_insert
         with self.db.session_scope() as s:

@@ -43,6 +43,7 @@ class MediaWorker:
                 self.queue.finish(job, result, "unknown"); return True
             with tempfile.TemporaryDirectory(prefix="bale-media-") as directory:
                 source = self.youtube.download(identifier, directory, deadline=deadline, active=active)
+                if isinstance(source,(str,Path)) and Path(source).is_file(): self.queue.metric(job,"downloaded_bytes",Path(source).stat().st_size)
                 parts = self.youtube.split(source, directory, deadline=deadline, active=active)
                 if result["parts"] and len(result["parts"]) != len(parts):
                     raise ServiceError("تقسیم فایل نسبت به تلاش قبل تغییر کرده است.")
@@ -66,6 +67,8 @@ class MediaWorker:
                         row["state"] = "unknown"; self.save(job, result)
                         self.queue.finish(job, result, "unknown"); return True
                     row["state"] = "sent"
+                    row["bytes"] = part.path.stat().st_size
+                    self.queue.metric(job,"uploaded_bytes",row["bytes"])
                     row["file_id"] = sent.get("video", {}).get("file_id") if isinstance(sent,dict) else None
                     self.save(job,result)
             if self.cache: self.cache.put(identifier,result)
@@ -73,6 +76,7 @@ class MediaWorker:
         except MediaPaused: self.queue.finish(job, result, "paused")
         except MediaCancelled: self.queue.finish(job, {}, "cancelled")
         except Exception:
+            self.queue.metric(job,"service_errors")
             self.queue.finish(job, result, "failed")
         return True
     def send_cached(self, job, result, active, deadline):

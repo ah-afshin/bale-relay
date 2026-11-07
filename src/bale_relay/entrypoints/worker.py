@@ -26,7 +26,9 @@ class Worker:
                     try: self.bale.call("answerCallbackQuery",{"callback_query_id":callback["id"]})
                     except ServiceError: pass
                 try: text = checkpoint.get("reply") if "reply" in checkpoint else self.dispatcher.handle(job)
-                except (ServiceError, AIError): text = "سرویس در دسترس نیست یا سهمیه تمام شده است؛ بعداً تلاش کنید."
+                except (ServiceError, AIError):
+                    self.queue.metric(job,"service_errors")
+                    text = "سرویس در دسترس نیست یا سهمیه تمام شده است؛ بعداً تلاش کنید."
                 with self.queue.db.session_scope() as s:
                     if not self.queue.live(job): raise Cancelled()
                     row=s.get(Job,job.id)

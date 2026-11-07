@@ -161,3 +161,22 @@ still performs no text generation or Google search and sends no chat message.
 Latest local suite: 61 cases, 58 pass and three PostgreSQL tests skip. Operator setup
 is in progress: Neon PostgreSQL, independent SerpApi quota and the test user's numeric
 Bale ID are not yet supplied. AI model allowlisting remains fail-closed.
+
+## Trial monitoring
+
+`bale-relay stats` prints aggregate job states, lanes, attempt counts, processing
+seconds, service-error count and known media payload bytes downloaded/uploaded.
+It does not return chat text, model prompts, user IDs, file IDs or credentials.
+Uploaded bytes count confirmed file uploads; file-ID resends have no new upload
+payload. Numbers exclude HTTP/protocol overhead and do not replace host billing
+usage. Retries add their actually measured transfer counts. Apply migration 0005
+before starting updated workers.
+
+Docker and CI now install direct versions from `requirements-runtime.txt`. The six
+core framework/client versions match the locally tested environment. Psycopg and
+Gunicorn pins were checked against official upstream release tags, but have not
+been installed/executed locally. This file pins direct packages; transitive versions
+and system binaries still need a fully resolved deployment lock/build verification.
+The current suite has 64 cases: 61 pass, including actual media/HTTP tests, and
+three PostgreSQL contention cases skip. Five migrations match model metadata on
+SQLite. `doctor` resolves the migration head from Alembic rather than a hardcoded ID.

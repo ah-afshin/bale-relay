@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: pip install -e '.[media,server]'
+      - run: pip install -r requirements-runtime.txt && pip install --no-deps -e .
       - run: python -m unittest discover -v
       - run: alembic upgrade head
       - run: docker build -t bale-relay:test .

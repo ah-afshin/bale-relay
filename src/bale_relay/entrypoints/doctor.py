@@ -30,7 +30,9 @@ def examine(config, database=None, live=False):
             c.execute(text("SELECT 1"))
             names=set(inspect(c).get_table_names())
             checks["database"]=set(Base.metadata.tables).issubset(names)
-            checks["migrations"]=c.execute(text("SELECT version_num FROM alembic_version")).scalar_one()=="0004"
+            from alembic.script import ScriptDirectory
+            scripts=ScriptDirectory(str(Path(__file__).resolve().parents[3]/"migrations"))
+            checks["migrations"]=c.execute(text("SELECT version_num FROM alembic_version")).scalar_one()==scripts.get_current_head()
     except Exception: checks["migrations"]=False
     finally:
         if db is not None and database is None: db.engine.dispose()

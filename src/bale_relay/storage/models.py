@@ -30,6 +30,9 @@ class Job(Base):
     lease_until: Mapped[float] = mapped_column(Float, default=0)
     created: Mapped[float] = mapped_column(Float)
     result: Mapped[dict] = mapped_column(JSON, default=dict)
+    started: Mapped[float] = mapped_column(Float,default=0,server_default="0")
+    finished: Mapped[float] = mapped_column(Float,default=0,server_default="0")
+    metrics: Mapped[dict] = mapped_column(JSON,default=dict,server_default="{}")
 
 class Message(Base):
     __tablename__ = "bot_messages"

@@ -19,12 +19,12 @@ is inferred from mocked test responses.
 | Persistent PostgreSQL | Models/migrations and conditional concurrency tests prepared | TEST_POSTGRES_URL required; those tests have not run |
 | Webhook/polling exclusivity and durable offset | Recovery tests; CLI registration/delete and expiring poll lease | Live transport switching |
 | Docker web+text+media supervisor | Dockerfile, Render blueprint, CI container-start smoke authored | Docker build and workflow execution |
-| Repeatable dependencies | yt-dlp and Deno pinned; source dependencies bounded | Full runtime dependency lock and fresh build |
+| Repeatable dependencies | Direct runtime versions, yt-dlp and Deno pinned | Full runtime dependency lock and fresh build |
 | Free no-card hosting | Render/Neon configuration prepared | Operator account availability and quota checks |
 | Real network emergency path | No evidence yet | Bale <-> foreign host test; no domestic-availability guarantee |
-| Several-day limited trial | Not started | Host, credentials, approved users and observation |
+| Several-day limited trial | Aggregate content-free stats command and processing/transfer metrics | Host, credentials, approved users and actual observation |
 
-Local suite: 61 cases, 58 passing and three PostgreSQL cases skipped. Actual ffmpeg
+Local suite: 64 cases, 61 passing and three PostgreSQL cases skipped. Actual ffmpeg
 splitting passes with checksum-verified official binaries. Read-only YouTube metadata
 from the current machine failed with a connection reset. PyPI installation still
 fails from the current network. GitHub release downloads work through curl.

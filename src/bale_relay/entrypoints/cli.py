@@ -11,6 +11,7 @@ def main():
     for name in ("allow-user", "block-user"):
         sub.add_parser(name).add_argument("id", type=int)
     sub.add_parser("serve")
+    sub.add_parser("stats")
     sub.add_parser("worker")
     sub.add_parser("media-worker")
     sub.add_parser("poll")
@@ -29,7 +30,10 @@ def main():
         print(json.dumps(checks,ensure_ascii=False))
         raise SystemExit(0 if all(checks.values()) else 1)
     cfg = Config.from_env()
-    if args.command in {"poll", "set-webhook", "delete-webhook", "webhook-info"}:
+    if args.command == "stats":
+        import json
+        print(json.dumps(Queue(Database(cfg.database_url),cfg).statistics()))
+    elif args.command in {"poll", "set-webhook", "delete-webhook", "webhook-info"}:
         from bale_relay.adapters.bale import Bale
         from bale_relay.core.http_client import HttpClient
         from bale_relay.storage.models import Receiver

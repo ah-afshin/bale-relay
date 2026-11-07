@@ -24,3 +24,10 @@ part. Completed parts are skipped after recovery. Local files are temporary.
 
 Keep the text and media processes singletons in this prototype. Increasing process
 counts is not supported until PostgreSQL contention and lane locking tests pass.
+
+Install direct pinned Python dependencies from `requirements-runtime.txt`, then the
+local project with `pip install --no-deps -e .`. The Docker build and GitHub workflow
+use the same file. Fresh installation and transitive resolution remain unverified
+from this network. During the invited-user trial, run `bale-relay stats` alongside
+the hosting provider's own usage dashboard; payload byte totals exclude protocol
+overhead and file-ID resend network usage on Bale's side.
