@@ -25,7 +25,7 @@ class MediaWorker:
         deadline = time.monotonic()+480
         try:
             with self.queue.db.session_scope() as s: payload = s.get(Update, job.update_id).payload
-            identifier = payload["message"]["text"].split(maxsplit=1)[1].strip()
+            identifier = payload.get("bot_command", payload.get("message",{}).get("text","")).split(maxsplit=1)[1].strip()
             from bale_relay.adapters.youtube import video_id
             identifier = video_id(identifier)
             cached = self.cache.get(identifier) if self.cache else None

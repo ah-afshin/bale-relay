@@ -73,3 +73,9 @@ class Receiver(Base):
     offset: Mapped[int] = mapped_column(BigInteger, default=0)
     owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
     lease_until: Mapped[float] = mapped_column(Float, default=0)
+
+class CacheEntry(Base):
+    __tablename__ = "cache_entries"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON)
+    expires: Mapped[float] = mapped_column(Float, index=True)

@@ -8,7 +8,10 @@ from bale_relay.storage.models import User, Update, Job, Message, Usage, Deliver
 from bale_relay.core.errors import ServiceError
 
 class Queue:
-    def __init__(self, database): self.db = database
+    def __init__(self, database, config=None):
+        from bale_relay.core.config import Config
+        self.db = database
+        self.config=config or Config()
     def allow(self, user_id, enabled=True):
         with self.db.session_scope() as s:
             user = s.get(User, user_id)
@@ -20,6 +23,8 @@ class Queue:
     def ingest(self, payload):
         if not isinstance(payload, dict) or type(payload.get("update_id")) is not int or payload["update_id"] < 0:
             raise ValueError("Invalid update")
+        payload = dict(payload)
+        payload.pop("bot_command", None)
         callback = payload.get("callback_query")
         message = callback.get("message") if isinstance(callback, dict) else payload.get("message")
         sender = callback.get("from") if isinstance(callback, dict) else message.get("from") if isinstance(message, dict) else None
@@ -35,7 +40,23 @@ class Queue:
             ins = sqlite_insert if self.db.engine.dialect.name == "sqlite" else pg_insert
             row = s.execute(ins(Update).values(id=payload["update_id"], user_id=uid, payload=payload, created=time.time()).on_conflict_do_nothing().returning(Update.id)).scalar_one_or_none()
             if row is None: return "duplicate"
-            text = message.get("text", "") if not callback else ""
+            payload = dict(payload)
+            payload.pop("bot_command", None)
+            if callback:
+                data = callback.get("data", "")
+                try:
+                    target_id, index = map(int, data.split(":"))
+                    target = s.get(Job, target_id)
+                    if not target or target.user_id != uid or target.generation != user.generation:
+                        raise ValueError()
+                    action = target.result.get("actions", [])[index] if index >= 0 else None
+                    if not action: raise ValueError()
+                    payload["bot_command"] = action["command"]
+                except (ValueError, TypeError, AttributeError, IndexError, KeyError):
+                    s.delete(s.get(Update, row))
+                    return "denied"
+                s.execute(update(Update).where(Update.id == row).values(payload=payload))
+            text = payload.get("bot_command", message.get("text", "") if not callback else "")
             command = text.split(maxsplit=1)[0] if isinstance(text, str) and text else ""
             # Cancellation is applied at receipt, so it can interrupt an in-flight generation.
             if command in {"/forget", "/new", "/cancel"}:
@@ -56,9 +77,9 @@ class Queue:
                 if lane == "media":
                     from datetime import datetime, timezone
                     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                    for key, limit in ((f"youtube:{day}:{uid}", 1), (f"youtube:{day}:global", 10)):
+                    for key, limit in ((f"youtube:{day}:{uid}", self.config.youtube_daily), (f"youtube:{day}:global", self.config.youtube_global_daily)):
                         stmt = ins(Usage).values(key=key, used=1).on_conflict_do_update(index_elements=[Usage.key], set_={"used": Usage.used+1}, where=Usage.used < limit).returning(Usage.key)
-                        if s.execute(stmt).scalar_one_or_none() is None:
+                        if limit<1 or s.execute(stmt).scalar_one_or_none() is None:
                             raise ServiceError("سهمیهٔ یوتیوب به پایان رسیده است.", 429)
             s.add(Job(update_id=row, user_id=uid, generation=user.generation, lane=lane, created=time.time(), result={}))
         return "accepted"
@@ -100,3 +121,18 @@ class Queue:
             s.execute(update(Delivery).where(Delivery.job_id.in_(expired)).values(text=""))
             s.execute(update(Update).where(Update.created < cutoff).values(payload={}))
             s.execute(update(Job).where(Job.created < cutoff).values(result={},state="expired",lease=None,lease_until=0))
+
+    def reserve_job(self, job, feature, limits):
+        ins = sqlite_insert if self.db.engine.dialect.name == "sqlite" else pg_insert
+        with self.db.session_scope() as s:
+            row = s.scalar(select(Job).where(Job.id==job.id).with_for_update())
+            if row.state != "running" or row.lease != job.lease:
+                raise ServiceError("کار دیگر فعال نیست.",409)
+            data = dict(row.result)
+            reserved = list(data.get("reserved", []))
+            if feature in reserved: return
+            for key, limit in limits:
+                stmt=ins(Usage).values(key=key,used=1).on_conflict_do_update(index_elements=[Usage.key],set_={"used":Usage.used+1},where=Usage.used<limit).returning(Usage.key)
+                if limit<1 or s.execute(stmt).scalar_one_or_none() is None:
+                    raise ServiceError("سهمیه به پایان رسیده است.",429)
+            row.result = dict(data,reserved=reserved+[feature])

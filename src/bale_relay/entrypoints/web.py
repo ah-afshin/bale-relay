@@ -12,7 +12,7 @@ def create_app(config=None, database=None):
     cfg.validate()
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 1_000_000
-    queue = Queue(database or Database(cfg.database_url))
+    queue = Queue(database or Database(cfg.database_url),cfg)
     app.extensions["queue"] = queue
     @app.get("/healthz")
     def health(): return jsonify(status="ok")

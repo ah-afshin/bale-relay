@@ -17,6 +17,9 @@ class Config:
     ai_daily: int = 20
     search_daily: int = 5
     youtube_daily: int = 1
+    ai_global_daily: int = 200
+    search_global_daily: int = 100
+    youtube_global_daily: int = 10
     @classmethod
     def from_env(cls):
         url = os.getenv("DATABASE_URL", cls.database_url)
@@ -28,10 +31,18 @@ class Config:
                   webhook_secret=os.getenv("WEBHOOK_SECRET", ""),
                   receiver_mode=os.getenv("RECEIVER_MODE", "webhook"),
                   env=os.getenv("APP_ENV", "development"),
+                  ai_daily=int(os.getenv("AI_DAILY_LIMIT","20")),
+                  search_daily=int(os.getenv("SEARCH_DAILY_LIMIT","5")),
+                  youtube_daily=int(os.getenv("YOUTUBE_DAILY_LIMIT","1")),
+                  ai_global_daily=int(os.getenv("AI_GLOBAL_DAILY_LIMIT","200")),
+                  search_global_daily=int(os.getenv("SEARCH_GLOBAL_DAILY_LIMIT","100")),
+                  youtube_global_daily=int(os.getenv("YOUTUBE_GLOBAL_DAILY_LIMIT","10")),
                   ai_allowed_models=tuple(x.strip() for x in os.getenv("AI_ALLOWED_MODELS", "").split(",") if x.strip()))
         cfg.validate()
         return cfg
     def validate(self):
+        for value in (self.ai_daily,self.search_daily,self.youtube_daily,self.ai_global_daily,self.search_global_daily,self.youtube_global_daily):
+            if type(value) is not int or value < 0: raise ValueError("Quota limits must be nonnegative integers")
         if self.receiver_mode not in {"webhook", "polling"}:
             raise ValueError("Invalid RECEIVER_MODE")
         if self.env == "production":

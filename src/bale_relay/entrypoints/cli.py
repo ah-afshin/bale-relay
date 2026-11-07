@@ -30,7 +30,7 @@ def main():
         bale = Bale(cfg.token, HttpClient(10, 5_000_000, "BaleRelay/0.1"))
         if args.command == "poll":
             if cfg.receiver_mode != "polling": raise RuntimeError("Set RECEIVER_MODE=polling first")
-            Poller(Queue(db),bale).run()
+            Poller(Queue(db,cfg),bale).run()
         elif args.command == "webhook-info":
             print("Webhook configured:", bool(bale.call("getWebhookInfo").get("url")))
         else:
@@ -63,14 +63,14 @@ def main():
         if args.command == "media-worker":
             from bale_relay.entrypoints.media_worker import MediaWorker
             from bale_relay.storage.media_cache import FileCache
-            MediaWorker(Queue(db), bale, cache=FileCache(db,cfg.token)).run()
+            MediaWorker(Queue(db,cfg), bale, cache=FileCache(db,cfg.token)).run()
         else:
-            Worker(Queue(db), Services(cfg, db), bale).run()
+            Worker(Queue(db,cfg), Services(cfg, db), bale).run()
     elif args.command == "serve":
         from bale_relay.entrypoints.web import create_app
         create_app(cfg).run(host="127.0.0.1", port=5000)
     else:
-        Queue(Database(cfg.database_url)).allow(args.id, args.command == "allow-user")
+        Queue(Database(cfg.database_url),cfg).allow(args.id, args.command == "allow-user")
         print("Updated access")
 
 if __name__ == "__main__": main()

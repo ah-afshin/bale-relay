@@ -67,7 +67,23 @@ explicitly authorizes retrying a failed or unknown send and may produce duplicat
 Each retry is restricted to the original owner and active conversation generation.
 Completed video's file IDs are reused for seven days, scoped to the bot token.
 
-Current local validation: 33 unittest cases passed; all three migrations match the
+Current local validation: 43 unittest cases passed; all four migrations match the
 SQLAlchemy metadata on SQLite. PostgreSQL and actual media tools are not yet tested.
 Installing a fresh environment failed because connections to PyPI timed out. No
 ffmpeg, Docker or PostgreSQL runtime was found in the checked installation paths.
+
+The bot now presents Persian inline menus. Model and video selection callbacks
+reference stored actions and are checked against their owner and conversation
+generation. Copying a button to another user or reusing it after `/new` is rejected.
+All user and global daily limits are configurable in `.env.example`.
+
+Google results use a database-backed cache shared across restarts/processes. Cached
+keys are SHA-256 digests scoped to the configured SerpApi key; raw query strings
+are not stored as cache keys. Atomic per-job quota reservations prevent duplicate
+usage charges when the same job is recovered.
+
+AI jobs persist an in-flight marker before generation and save the completed reply
+with history in one transaction. A recovered in-flight generation becomes unknown;
+only `/retry JOB_ID` authorizes another provider call. A completed reply is reused
+without generating it again. These behaviors are covered by local regression tests;
+they do not claim exactly-once delivery across provider/network boundaries.

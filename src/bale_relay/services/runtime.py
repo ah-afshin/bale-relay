@@ -11,7 +11,10 @@ class Services:
         ctx = SimpleNamespace(config=config, database=database,
                               http=HttpClient(10, 5_000_000, "BaleRelay/0.1"), cache=MemoryCache())
         self.ai = AIService(ctx)
-        self.google = GoogleSearchService(ctx)
+        from bale_relay.storage.cache import DatabaseCache
+        search_ctx=SimpleNamespace(config=config,database=database,http=ctx.http,
+            cache=DatabaseCache(database,namespace=config.secret("SERPAPI_API_KEY")))
+        self.google = GoogleSearchService(search_ctx)
     def models(self):
         allowed = set(self.config.ai_allowed_models)
         return [row["id"] for row in self.ai.models()["data"] if row["id"] in allowed]
