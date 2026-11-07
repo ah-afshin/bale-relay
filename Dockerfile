@@ -6,7 +6,7 @@ RUN curl -fsSL https://github.com/denoland/deno/releases/download/v${DENO_VERSIO
 WORKDIR /app
 COPY pyproject.toml ./
 COPY src ./src
-RUN pip install --no-cache-dir . gunicorn 'yt-dlp[default]'
+RUN pip install --no-cache-dir . gunicorn 'yt-dlp[default]==2026.10.26'
 COPY alembic.ini ./
 COPY migrations ./migrations
 RUN useradd --create-home relay && chown -R relay:relay /app

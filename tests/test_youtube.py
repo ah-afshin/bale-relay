@@ -35,6 +35,7 @@ class YoutubeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             yt=YouTube(); yt.duration=Mock(return_value=60)
             def run(args, **kwargs):
+                if args[0]=="ffprobe": return json.dumps({"frames":[{"best_effort_timestamp_time":"30"}]})
                 target=Path(args[-1]); target.write_bytes(b"x"*(20 if "segment-001" in target.name else 5))
             yt.run=run
             with patch("bale_relay.adapters.youtube.MAX_PART",10):

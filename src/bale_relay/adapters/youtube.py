@@ -127,6 +127,7 @@ class YouTube:
         duration = self.duration(source, deadline=deadline, active=active)
         if duration > MAX_DURATION+1: raise ServiceError("ویدیو طولانی‌تر از سقف مجاز است.", 400)
         pending = [(0.0, duration)]
+        keyframes = None
         parts = []
         attempts = 0
         while pending:
@@ -143,6 +144,15 @@ class YouTube:
             else:
                 target.unlink()
                 if end-start <= 5: raise ServiceError("تقسیم بدون تبدیل کیفیت در سقف حجم ممکن نیست.", 400)
-                midpoint = (start+end)/2
+                if keyframes is None:
+                    raw=self.run(["ffprobe","-v","error","-select_streams","v:0","-skip_frame","nokey",
+                                  "-show_entries","frame=best_effort_timestamp_time","-of","json",str(source)],
+                                 deadline=deadline,active=active)
+                    try:
+                        keyframes=[float(frame["best_effort_timestamp_time"]) for frame in json.loads(raw)["frames"]]
+                    except (KeyError,ValueError,TypeError): raise ServiceError("فریم‌های مرزی قابل خواندن نیستند.") from None
+                candidates=[t for t in keyframes if start+0.01<t<end-0.01]
+                if not candidates: raise ServiceError("تقسیم در فریم کلیدی در سقف حجم ممکن نیست.",400)
+                midpoint=min(candidates,key=lambda t:abs(t-(start+end)/2))
                 pending[0:0] = [(start,midpoint),(midpoint,end)]
         return parts

@@ -17,7 +17,17 @@ def main():
     sub.add_parser("delete-webhook")
     sub.add_parser("webhook-info")
     sub.add_parser("set-webhook").add_argument("origin")
+    sub.add_parser("doctor").add_argument("--live", action="store_true")
     args = parser.parse_args()
+    if args.command == "doctor":
+        import json
+        from bale_relay.entrypoints.doctor import examine
+        try: cfg=Config.from_env()
+        except Exception:
+            print(json.dumps({"configuration":False})); raise SystemExit(1)
+        checks=examine(cfg,live=args.live)
+        print(json.dumps(checks,ensure_ascii=False))
+        raise SystemExit(0 if all(checks.values()) else 1)
     cfg = Config.from_env()
     if args.command in {"poll", "set-webhook", "delete-webhook", "webhook-info"}:
         from bale_relay.adapters.bale import Bale

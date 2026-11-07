@@ -87,3 +87,20 @@ with history in one transaction. A recovered in-flight generation becomes unknow
 only `/retry JOB_ID` authorizes another provider call. A completed reply is reused
 without generating it again. These behaviors are covered by local regression tests;
 they do not claim exactly-once delivery across provider/network boundaries.
+
+## Readiness check
+
+`bale-relay doctor` checks required tools, configuration, schema and migration state.
+It prints only boolean results and exits nonzero if any required check fails.
+`bale-relay doctor --live` additionally verifies the bot token with Bale `getMe`;
+it does not generate AI replies, consume Google searches or send chat messages.
+
+Install media/server extras with `pip install -e ".[media,server]"`. The official
+yt-dlp 2026.10.26 package has been imported locally; its version is pinned for media
+installs. Other runtime versions and the Docker image still need reproducible-build
+verification. Locally downloaded binaries are ignored under `.tools/`.
+
+The actual ffmpeg test is `tests.test_media_real`: it generates H.264/AAC media,
+splits at keyframes, checks every output's real byte size and duration, and verifies
+continuous intended time ranges. If ffmpeg/ffprobe are missing it reports a skip;
+a skipped result does not satisfy the real-media acceptance gate.
