@@ -242,9 +242,12 @@ class ProviderAdapter:
         status = response.status_code
         if 200 <= status < 300:
             return
-        if status in (401, 403):
+        if status == 401:
             raise AIError("The AI provider rejected its configured credentials", 502,
                           "upstream_authentication_failed", "server_error")
+        if status == 403:
+            raise AIError("The AI provider denied access from this account or host", 502,
+                          "upstream_access_denied", "server_error")
         if status == 429:
             raise AIError("The AI provider rate limit was reached", 429, "upstream_rate_limit", "rate_limit_error")
         if status == 404 and not discovery:
@@ -252,6 +255,14 @@ class ProviderAdapter:
         if status in (408, 504):
             raise AIError("The AI provider timed out", 504, "upstream_timeout", "timeout")
         if status == 400:
+            if inspect_error_body:
+                try:
+                    body=response.json()
+                    error=body.get("error",{}) if isinstance(body,dict) else {}
+                    hint=str(error.get("message","")).lower() if isinstance(error,dict) else ""
+                    if any(term in hint for term in ("location is not supported","not available in your country","unsupported country","unsupported location","region is not supported")):
+                        raise AIError("The AI provider is unavailable from this region",503,"upstream_region_blocked","server_error")
+                except (ValueError,TypeError,AttributeError): pass
             if not discovery and inspect_error_body:
                 try:
                     body = response.json()

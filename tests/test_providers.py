@@ -49,6 +49,17 @@ class ProviderTests(unittest.TestCase):
         with self.assertRaises(ServiceError): services.complete("groq/paid",[{"role":"user","content":"test"}])
         services.ai.complete.assert_not_called()
 
+    def test_forbidden_is_not_assumed_invalid_credentials(self):
+        with patch.dict(os.environ,{"OPENROUTER_API_KEY":"test"}):
+            ai=self.service({});ai.http.request.return_value=response({},403)
+            with self.assertRaises(AIError) as caught: ai.adapters["openrouter"].list_models("test")
+            self.assertEqual(caught.exception.code,"upstream_access_denied")
+    def test_gemini_region_rejection_has_safe_error_code(self):
+        ai=self.service({});ai.http.request.return_value=response({"error":{"message":"User location is not supported for the API use."}},400)
+        with self.assertRaises(AIError) as caught: ai.adapters["gemini"].list_models("test")
+        self.assertEqual(caught.exception.code,"upstream_region_blocked")
+        self.assertNotIn("User location",caught.exception.message)
+
 class SearchTests(unittest.TestCase):
     setUp=fixtures.IngressTests.setUp
     def service(self):

@@ -41,4 +41,15 @@ def examine(config, database=None, live=False):
             me=Bale(config.token,HttpClient(10,1_000_000,"BaleRelay/0.1")).call("getMe")
             checks["live_bale"]=isinstance(me,dict) and bool(me.get("id"))
         except Exception: checks["live_bale"]=False
+        from types import SimpleNamespace
+        from bale_relay.core.cache import MemoryCache
+        from bale_relay.services.ai import AIService,AIError
+        ai=AIService(SimpleNamespace(config=config,http=HttpClient(10,5_000_000,"BaleRelay/0.1"),cache=MemoryCache()))
+        for name,provider in ai.providers.items():
+            key=config.secret(provider.key_env)
+            if not key: continue
+            try:
+                models=ai.adapters[name].list_models(key)
+                checks["live_ai_"+name]=bool(models)
+            except AIError: checks["live_ai_"+name]=False
     return checks

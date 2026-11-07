@@ -148,3 +148,16 @@ Video upload bodies now stream in 64 KiB chunks instead of requests' buffered fi
 multipart mode; actual localhost HTTP verifies content length and body correctness.
 Upload timeout is capped by the remaining media pass deadline, with cancellation
 and deadline checkpoints while reading the file.
+
+## Live read-only checks so far
+
+Bale `getMe` succeeded using the locally configured token. Gemini discovery reported
+an unsupported user location; OpenRouter discovery returned HTTP 403. Regional or
+host-policy denials are now represented separately from HTTP 401 authentication
+failures. No raw provider error body or credential appears in diagnostics.
+`doctor --live` now also checks configured AI providers' model-list endpoints; it
+still performs no text generation or Google search and sends no chat message.
+
+Latest local suite: 61 cases, 58 pass and three PostgreSQL tests skip. Operator setup
+is in progress: Neon PostgreSQL, independent SerpApi quota and the test user's numeric
+Bale ID are not yet supplied. AI model allowlisting remains fail-closed.

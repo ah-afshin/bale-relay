@@ -24,12 +24,19 @@ is inferred from mocked test responses.
 | Real network emergency path | No evidence yet | Bale <-> foreign host test; no domestic-availability guarantee |
 | Several-day limited trial | Not started | Host, credentials, approved users and observation |
 
-Local suite: 59 cases, 56 passing and three PostgreSQL cases skipped. Actual ffmpeg
+Local suite: 61 cases, 58 passing and three PostgreSQL cases skipped. Actual ffmpeg
 splitting passes with checksum-verified official binaries. Read-only YouTube metadata
 from the current machine failed with a connection reset. PyPI installation still
 fails from the current network. GitHub release downloads work through curl.
 
-No real tokens are present in this repository's `.env` at the last inspection. Place
-credentials in the ignored local `.env` or host secret settings, never in commits or
-chat. Use `.env.example` as the key list. A real smoke test also needs the owner's
-numeric Bale user ID. The source website's `.env` is not copied or inspected.
+The operator has now configured Bale, Gemini and OpenRouter credentials in the
+ignored local `.env`. A real Bale `getMe` request succeeded. Gemini model discovery
+reported a geographic restriction; OpenRouter model discovery returned HTTP 403.
+Neither result proves that the configured AI keys are invalid. Test these again from
+the foreign deployment host. No generation or chat messages were sent.
+
+The configured DATABASE_URL is still SQLite; a Neon PostgreSQL connection string and
+SERPAPI_API_KEY with independent quota remain missing, as does the operator's numeric
+Bale user ID. WEBHOOK_SECRET was generated locally without displaying its value.
+AI_ALLOWED_MODELS remains empty until model access and free-tier eligibility are
+verified. Credentials are never copied from the source website's `.env`.
