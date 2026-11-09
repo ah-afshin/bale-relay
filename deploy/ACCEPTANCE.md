@@ -1,47 +1,56 @@
-# Acceptance evidence and outstanding gates
+# Verification scope and deployment acceptance
 
-This document tracks the original agreed scope. No deployment or live-service success
-is inferred from mocked test responses.
+Use this checklist when evaluating a revision for deployment. Automated tests,
+local integration tests and live-host checks establish different things. Mocked
+provider responses do not prove live availability.
 
-| Requirement | Current evidence | Remaining verification |
-|---|---|---|
-| Independent bot repository, no website relay | Package imports only bale_relay; separate Git history | Fresh install on Python 3.12 |
-| Durable authenticated webhook and duplicate handling | Ingress regression tests; Alembic schema comparison | PostgreSQL contention and real Bale webhook |
-| Private invited users and owned callbacks | Ingress/conversation tests; deny foreign and stale buttons | Invited-user trial |
-| Five AI providers and explicit free allowlist | All five provider adapter regression cases; allowlist/fallback tests | Operator-approved keys/models and live generation |
-| Ordered AI history, deletion and seven-day retention | Conversation and retention tests, generation checkpoint/recovery | PostgreSQL deletion/generation race test |
-| Google results, persistent cache and 200 monthly cap | Provider tests prove cache reuse and quota fail-closed | Live SerpApi key with independent free quota |
-| YouTube search, preview and select/download | Dispatcher commands and owned inline actions; constrained adapter tests | Live foreign-host search/download |
-| 360p, 60 min, 250 MB, ten 45 MB parts | Limits in adapter; synthetic actual ffmpeg media tests | Real long video, disk-full and actual byte-limit interruption |
-| Bounded process lifetime and cancellation | Downloader process deadlines; upload checkpoint tests | Hard process termination on deployed host |
-| Part recovery, file-ID reuse, unknown-send explicit retry | Media/cache/recovery tests | Real Bale file-ID reuse and interrupted upload |
-| Low-memory uploads | Actual localhost HTTP multipart exchange, <=64 KiB body chunks | Resident-memory measurement on free host |
-| Persistent PostgreSQL | Migrations, schema comparison and real contention tests passed | All three contention tests passed against temporary PostgreSQL 16.15 |
-| Webhook/polling exclusivity and durable offset | Recovery tests; CLI registration/delete and expiring poll lease | Live transport switching |
-| Docker web+text+media supervisor | Dockerfile, Render blueprint, CI container-start smoke authored | Docker build and workflow execution |
-| Repeatable dependencies | Direct runtime versions, yt-dlp and Deno pinned | Full runtime dependency lock and fresh build |
-| Free no-card hosting | Render/Neon configuration prepared | Operator account availability and quota checks |
-| Real network emergency path | No evidence yet | Bale <-> foreign host test; no domestic-availability guarantee |
-| Several-day limited trial | Aggregate content-free stats command and processing/transfer metrics | Host, credentials, approved users and actual observation |
+## Automated coverage
 
-Local suite: all 64 cases pass with no skips, including actual PostgreSQL and ffmpeg. Actual ffmpeg
-splitting passes with checksum-verified official binaries. Read-only YouTube metadata
-from the current machine failed with a connection reset. PyPI installation still
-fails from the current network. GitHub release downloads work through curl.
+Run `python -m unittest discover -v` as described in
+[Contributing](../CONTRIBUTING.md#tests). PostgreSQL tests require
+`TEST_POSTGRES_URL`; real-media tests require ffmpeg and ffprobe. Record skips
+explicitly rather than treating them as integration passes.
 
-The operator has now configured Bale, Gemini and OpenRouter credentials in the
-ignored local `.env`. A real Bale `getMe` request succeeded. Gemini model discovery
-reported a geographic restriction; OpenRouter model discovery returned HTTP 403.
-Neither result proves that the configured AI keys are invalid. Test these again from
-the foreign deployment host. No generation or chat messages were sent.
+| Area | Repository coverage | Additional acceptance check |
+| --- | --- | --- |
+| Access and ingestion | Private identity checks, duplicate updates, owned/stale buttons | Real Bale webhook with approved and unapproved users |
+| Conversation and deletion | History, generation checkpoints, retention and deletion | Deletion/generation races on the deployed database |
+| AI | Five adapters, model allowlist, no automatic fallback, recovery | Approved no-charge models and actual generation from the host |
+| Google | Independent-quota gate, shared cache, monthly cap | Independent SerpApi account and live search |
+| YouTube | Validated IDs, metadata constraints, bounded subprocesses | Live search/download from the host |
+| Media splitting | Generated H.264/AAC sample, actual byte caps, continuous time ranges | Long video, disk exhaustion and download interruption |
+| Delivery and recovery | Durable ledger, retries, part recovery, file-ID cache | Interrupted upload, restart and real Bale file-ID reuse |
+| Upload memory | Localhost HTTP multipart exchange, bounded chunks | Resident memory and deadline behavior on the host |
+| PostgreSQL | Duplicate-ingress, quota and job-claim contention tests | Migrations and recovery against deployment-equivalent PostgreSQL |
+| Receivers | Polling lease, durable offsets, webhook exclusivity | Live switching between webhook and polling |
+| Packaging | Direct dependency pins and container smoke workflow | Fresh build, startup and complete dependency reproducibility |
+| Operations | Content-free aggregate metrics | Several-day invited-user trial with host usage monitoring |
+| Network path | No automated outage guarantee | Bale-to-host connectivity under the intended network conditions |
 
-The configured DATABASE_URL is still SQLite; a Neon PostgreSQL connection string and
-SERPAPI_API_KEY with independent quota remain missing, as does the operator's numeric
-Bale user ID. WEBHOOK_SECRET was generated locally without displaying its value.
-AI_ALLOWED_MODELS remains empty until model access and free-tier eligibility are
-verified. Credentials are never copied from the source website's `.env`.
+The [GitHub workflow](../.github/workflows/tests.yml) runs PostgreSQL and ffmpeg
+tests, builds Docker, starts web/text/media processes, checks `/healthz`, verifies
+default-deny webhook access and checks media executables. Check the workflow result
+for the target revision; the presence of a workflow file is not a passing result.
+It uses test credentials and does not validate live providers.
 
-Final verification executed all 64 cases with no skips. Five migrations were applied
-on PostgreSQL 16.15 and model metadata matched. The temporary server was shut down
-and its data directory removed. Docker/Render and the credentialed foreign-host
-pilot remain unverified; local test success is not a deployment success claim.
+## Historical local verification
+
+The previous development record reports 64 tests passing without skips against a
+temporary PostgreSQL 16.15 instance and real ffmpeg. It also reports all five
+Alembic migrations applied with no differences from model metadata. These are
+historical local results, not a current CI or deployment certification.
+
+Earlier network checks did not establish live AI generation or YouTube downloads
+from the eventual host. Per-machine dependency failures, local credential setup
+and successive intermediate test counts are not maintained as project status.
+
+## Before relying on a deployment
+
+- Confirm a fresh image builds and starts with persistent PostgreSQL and migrations.
+- Validate credentials, approved users and model access from the actual host.
+- Exercise AI, search, video delivery, cancellation and explicit retry behavior.
+- Test sleep/restart recovery and inspect resource use without logging private data.
+- Confirm hosting and provider quota/billing settings and complete an invited-user trial.
+
+Record the revision, environment, commands, outcomes and skipped checks in a release
+or deployment record. Do not include credentials, private messages or secret URLs.

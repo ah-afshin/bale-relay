@@ -1,7 +1,11 @@
 .git
 .env
+.env.*
 .venv
+.tools
 instance
 __pycache__
 tests
 *.egg-info
+build
+dist

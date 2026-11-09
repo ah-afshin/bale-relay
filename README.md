@@ -1,216 +1,102 @@
 # Bale Relay
 
-Independent Python bot for private Bale chats, with AI, Google search and YouTube delivery.
-Implementation is in progress. This checkout currently includes the durable ingress/queue,
-access control, migrations, provider adapters and their tests. The text dispatcher and durable outbound delivery ledger are implemented. The
-YouTube pipeline and deployment bundle now have an initial implementation; real media and deployment verification remain outstanding.
-Local verification is complete; treat the first foreign-host deployment as an experimental pilot until live AI, Google, YouTube and several-day operation pass.
+A standalone Python bot for private Bale chats, with Persian menus, AI conversations,
+Google search through SerpApi, and YouTube video delivery. Access is limited to users
+explicitly approved by the operator.
 
-## Development
+The project is experimental. Automated tests cover persistence, access control,
+recovery and provider adapters; deployment and live provider availability must be
+verified on the intended host. Availability inside Iran does not guarantee that
+Bale can reach a foreign-hosted bot during an internet outage.
 
-Python 3.12+ is required. From this repository:
+## Features
+
+- AI conversations with model selection across Gemini, Groq, OpenRouter, Cerebras
+  and Mistral. Only operator-approved models are available, with no automatic fallback.
+- Google search with a persistent cache and usage limits.
+- YouTube search, previews and bounded video downloads, with resumable delivery.
+- Durable inbound queues, separate text and media workers, and webhook or polling reception.
+- Private-chat access checks, user-owned buttons, daily quotas and conversation deletion.
+
+## Quick start
+
+Use Python 3.12 or later. Run these commands from the repository root. This example
+uses PowerShell and SQLite for local development; production requires PostgreSQL.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -e .
+python -m pip install -e .
 Copy-Item .env.example .env
+```
+
+Edit `.env`: set `BALE_TOKEN` and `RECEIVER_MODE=polling`. To enable AI, add a
+provider key and explicitly approved `AI_ALLOWED_MODELS` entries as described in
+[Configuration](docs/configuration.md). An empty allowlist disables AI.
+
+Initialize the database and approve your numeric Bale user ID:
+
+```powershell
 alembic upgrade head
 bale-relay allow-user 123456789
-bale-relay serve
-python -m unittest discover -v
 ```
 
-The production configuration rejects SQLite. Use a Neon PostgreSQL URL with TLS;
-all state must survive a Render restart. Never commit `.env` or tokens.
-The webhook secret must be independent from the Bale token; disable HTTP access logs
-in deployment because the secret is part of the path. Only private chats whose sender
-matches the chat ID and an enabled administrator-provisioned user are accepted.
+Replace the example ID with your own. For a new bot on Windows, the
+[identity helper](deploy/README.md#windows-identity-and-registration-helper) can
+find your ID before you start a receiver.
 
-Provider adapters are copied from the user's wartime-mirror repository and import
-only this package. Discovery does not prove a model is free. AI_ALLOWED_MODELS must
-contain only explicitly approved model IDs on no-charge provider accounts.
-Google search remains disabled until SERPAPI_INDEPENDENT_QUOTA=1 confirms that this
-key's quota is independent from the original website. No automatic paid fallback.
-
-## Remaining acceptance gates
-
-- Further crash/concurrency verification of the conversational worker and delivery ledger.
-- Real media verification against yt-dlp/ffmpeg and actual restart behavior.
-- Docker build verification and runtime dependency lock.
-- PostgreSQL concurrency tests, real ffmpeg tests and sleep/restart recovery.
-- Live Bale/Neon/AI/search smoke test with operator credentials.
-- Several days of invited-user operation before relying on the service.
-
-Bale's domestic availability does not guarantee its foreign API connection survives
-an outage. Messages pass through Bale and AI providers. `/forget` can only remove
-application-controlled data, not copies held by third parties.
-
-## Receiver and recovery commands
-
-After migrations and access provisioning:
+If the bot already has a webhook, stop its existing receiver and run
+`bale-relay delete-webhook` before starting polling. Run each of these commands in
+a separate terminal, with the same virtual environment activated and working directory:
 
 ```powershell
-bale-relay set-webhook https://your-service.onrender.com
-bale-relay webhook-info
+bale-relay poll
 ```
-
-To move to polling, stop the webhook deployment, run `bale-relay delete-webhook`,
-set `RECEIVER_MODE=polling`, and run `bale-relay poll`. Run the text and media workers
-separately. Polling checks the remote webhook and holds an expiring database lease;
-a second poller is rejected. Received offsets are committed only after ingestion.
-`webhook-info` prints only whether a webhook exists, never its secret URL.
-
-Bale commands: `/youtube query` lists videos, `/video ID` previews metadata and
-`/download ID` queues delivery. `/status` resumes paused work. `/retry JOB_ID`
-explicitly authorizes retrying a failed or unknown send and may produce duplicates.
-Each retry is restricted to the original owner and active conversation generation.
-Completed video's file IDs are reused for seven days, scoped to the bot token.
-
-Earlier local schema validation: all four migrations matched the
-SQLAlchemy metadata on SQLite. PostgreSQL and actual media tools are not yet tested.
-Installing a fresh environment failed because connections to PyPI timed out. No
-ffmpeg, Docker or PostgreSQL runtime was found in the checked installation paths.
-
-The bot now presents Persian inline menus. Model and video selection callbacks
-reference stored actions and are checked against their owner and conversation
-generation. Copying a button to another user or reusing it after `/new` is rejected.
-All user and global daily limits are configurable in `.env.example`.
-
-Google results use a database-backed cache shared across restarts/processes. Cached
-keys are SHA-256 digests scoped to the configured SerpApi key; raw query strings
-are not stored as cache keys. Atomic per-job quota reservations prevent duplicate
-usage charges when the same job is recovered.
-
-AI jobs persist an in-flight marker before generation and save the completed reply
-with history in one transaction. A recovered in-flight generation becomes unknown;
-only `/retry JOB_ID` authorizes another provider call. A completed reply is reused
-without generating it again. These behaviors are covered by local regression tests;
-they do not claim exactly-once delivery across provider/network boundaries.
-
-## Readiness check
-
-`bale-relay doctor` checks required tools, configuration, schema and migration state.
-It prints only boolean results and exits nonzero if any required check fails.
-`bale-relay doctor --live` additionally verifies the bot token with Bale `getMe`;
-it does not generate AI replies, consume Google searches or send chat messages.
-
-Install media/server extras with `pip install -e ".[media,server]"`. The official
-yt-dlp 2026.10.26 package has been imported locally; its version is pinned for media
-installs. Other runtime versions and the Docker image still need reproducible-build
-verification. Locally downloaded binaries are ignored under `.tools/`.
-
-The actual ffmpeg test is `tests.test_media_real`: it generates H.264/AAC media,
-splits at keyframes, checks every output's real byte size and duration, and verifies
-continuous intended time ranges. If ffmpeg/ffprobe are missing it reports a skip;
-a skipped result does not satisfy the real-media acceptance gate.
-
-## Verification automation
-
-The GitHub workflow runs Python 3.12 tests with a disposable PostgreSQL service and
-ffmpeg, builds the Docker image, starts its web/text/media processes against the
-test database, checks `/healthz`, verifies an unapproved user's webhook is denied,
-and checks the container's ffmpeg/ffprobe/Deno/yt-dlp executables. This workflow has
-been authored but not executed in this session; it requires pushing the commit.
-No provider keys or chat recipients are configured in these automated checks.
-
-`TEST_POSTGRES_URL` enables three real database contention tests. Each uses a unique
-temporary schema and removes it afterward. Supply a disposable test database, never
-a production DSN. With no URL they explicitly skip.
-
-Provider regression tests cover all five AI adapters, deny unapproved models and
-verify no automatic provider fallback. Google tests cover independent-quota
-attestation, cross-instance caching and the 200-attempt monthly fail-closed limit.
-These are mocked upstream responses and do not prove live provider availability.
-
-## Latest local evidence
-
-The official ffmpeg Windows shared archive (91,000,239 bytes) was downloaded from
-`yt-dlp/FFmpeg-Builds` and checked against the release API SHA-256 digest. The real
-media test now passes: it exposed and fixed an input-seek bug that retained an
-older GOP in later parts. Output seeking at selected keyframes avoids that overlap.
-
-With the downloaded tools on PATH, the suite has 56 cases: 53 pass, including actual
-ffmpeg generation/splitting; three PostgreSQL tests skip without TEST_POSTGRES_URL.
-The official yt-dlp 2026.10.26 module executes locally. A read-only request to the
-public yt-dlp test video failed with a connection reset from the YouTube path;
-live YouTube availability from the eventual foreign host is still unverified.
-
-PyPI is still unreachable here. The independent virtualenv is incomplete. Local
-unit tests currently use the existing wartime-mirror Python environment with this
-repository's src on PYTHONPATH; the bot source has no runtime dependency on that
-repository. Docker, PostgreSQL and live Bale/provider credentials remain separate
-verification gates. No commit has been pushed to GitHub during this session.
-
-See `deploy/ACCEPTANCE.md` for requirement-by-requirement evidence and remaining
-verification. Current local suite: 59 cases, 56 pass, three PostgreSQL skips.
-Video upload bodies now stream in 64 KiB chunks instead of requests' buffered file
-multipart mode; actual localhost HTTP verifies content length and body correctness.
-Upload timeout is capped by the remaining media pass deadline, with cancellation
-and deadline checkpoints while reading the file.
-
-## Live read-only checks so far
-
-Bale `getMe` succeeded using the locally configured token. Gemini discovery reported
-an unsupported user location; OpenRouter discovery returned HTTP 403. Regional or
-host-policy denials are now represented separately from HTTP 401 authentication
-failures. No raw provider error body or credential appears in diagnostics.
-`doctor --live` now also checks configured AI providers' model-list endpoints; it
-still performs no text generation or Google search and sends no chat message.
-
-Latest local suite: 61 cases, 58 pass and three PostgreSQL tests skip. Operator setup
-is in progress: Neon PostgreSQL, independent SerpApi quota and the test user's numeric
-Bale ID are not yet supplied. AI model allowlisting remains fail-closed.
-
-## Trial monitoring
-
-`bale-relay stats` prints aggregate job states, lanes, attempt counts, processing
-seconds, service-error count and known media payload bytes downloaded/uploaded.
-It does not return chat text, model prompts, user IDs, file IDs or credentials.
-Uploaded bytes count confirmed file uploads; file-ID resends have no new upload
-payload. Numbers exclude HTTP/protocol overhead and do not replace host billing
-usage. Retries add their actually measured transfer counts. Apply migration 0005
-before starting updated workers.
-
-Docker and CI now install direct versions from `requirements-runtime.txt`. The six
-core framework/client versions match the locally tested environment. Psycopg and
-Gunicorn pins were checked against official upstream release tags, but have not
-been installed/executed locally. This file pins direct packages; transitive versions
-and system binaries still need a fully resolved deployment lock/build verification.
-The current suite has 64 cases: 61 pass, including actual media/HTTP tests, and
-three PostgreSQL contention cases skip. Five migrations match model metadata on
-SQLite. `doctor` resolves the migration head from Alembic rather than a hardcoded ID.
-
-## Final local verification
-
-All 64 tests passed with no skips using real PostgreSQL 16.15 and ffmpeg. All five
-Alembic migrations ran on PostgreSQL and schema comparison returned no differences.
-The temporary localhost-only PostgreSQL instance was stopped and removed afterward.
-The psycopg 3.3.8 Python implementation used official source and the verified test
-bundle's libpq. No production database or user data was used for these tests.
-
-For setup on Windows without installing the Python CLI, use the dependency-free
-PowerShell helper from the repository root:
 
 ```powershell
-.\deploy\bale-admin.ps1 -Action Identify
-.\deploy\bale-admin.ps1 -Action Register -Origin https://YOUR-SERVICE.onrender.com
+bale-relay worker
 ```
 
-Identify must be run before webhook registration. It asks you to send a random
-marker to your bot and returns only the matching private sender's numeric ID.
-Register reads BALE_TOKEN and WEBHOOK_SECRET from the ignored local .env and never
-prints the secret webhook URL. Copy the exact same WEBHOOK_SECRET into Render.
+For YouTube, also install `python -m pip install -e ".[media]"`, make `ffmpeg`,
+`ffprobe` and Deno available on `PATH`, and start `bale-relay media-worker` in
+another terminal. The Docker image includes these tools.
 
-Once the container has created tables, allow that ID using Neon's SQL Editor:
+## Using the bot
 
-```sql
-INSERT INTO bot_users (id, enabled, generation, model, mode)
-VALUES (YOUR_NUMERIC_ID, TRUE, 0, '', 'ai')
-ON CONFLICT (id) DO UPDATE SET enabled = TRUE;
-```
+Send `/start` in an approved private chat to open the Persian menu.
 
-Docker build/startup, Render/Neon account setup and real foreign-host provider
-availability are not established by the local test suite. The CI workflow is
-prepared to check Docker on a runner. Model allowlisting must be supplied by the
-operator using free model identifiers; an empty list intentionally disables AI.
+| Command | Action |
+| --- | --- |
+| `/ai`, `/model` | Enter AI mode and select an approved model |
+| `/new` | Start a new conversation |
+| `/search query` | Search Google |
+| `/youtube query` | Search YouTube |
+| `/video ID`, `/download ID` | Preview or request a video by its YouTube ID |
+| `/status` | Show recent jobs and resume paused work |
+| `/cancel` | Cancel current work |
+| `/retry JOB_ID` | Explicitly retry an eligible job; an uncertain send may be duplicated |
+| `/forget`, `/privacy` | Delete application-controlled conversation data or read the privacy notice |
+
+## Privacy and reliability
+
+Messages pass through Bale and the selected service providers. Conversation history
+has a seven-day retention window; `/forget` cannot delete copies held by third
+parties. Keep `.env`, credentials, private messages and secret webhook paths out of
+logs and Git history.
+
+Inbound updates are persisted before acknowledgment. Recovery avoids automatically
+repeating uncertain AI calls or sends, but delivery across external APIs is not
+guaranteed to happen exactly once. Only explicitly approved private users can use the bot.
+
+## Documentation
+
+- [Configuration and provider setup](docs/configuration.md)
+- [Deployment, receiver switching and operations](deploy/README.md)
+- [Architecture and recovery behavior](docs/architecture.md)
+- [Contributing and running tests](CONTRIBUTING.md)
+- [Verification scope and deployment acceptance](deploy/ACCEPTANCE.md)
+- [Security reporting](SECURITY.md)
+
+## License
+
+[MIT](LICENSE) - Copyright (c) 2026 ah-afshin.
